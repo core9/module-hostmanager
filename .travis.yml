@@ -1,0 +1,8 @@
+language: java
+env:
+  global:
+    - TERM=dumb
+    - secure: BINTRAY_USER
+    - secure: BINTRAY_KEY
+install: 
+  - "./gradlew clean test build publish publishBintray"

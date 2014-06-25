@@ -1,0 +1,27 @@
+// Core9 Framework: module-boilerplate
+// Build with: ./gradlew clean test build
+// Publish with  ./gradlew clean test build publish publishBintray
+
+apply from: 'http://www.core9.io/buildfiles/gradle/source.gradle'
+apply from: 'http://www.core9.io/buildfiles/gradle/publish.gradle'
+
+buildscript {
+	apply from: 'http://www.core9.io/buildfiles/gradle/publish-build.gradle'
+}
+
+/**
+ * @TODO Somehow cannot be moved to publish.gradle
+ */
+task publishBintray (type: org._10ne.gradle.rest.RestTask, dependsOn: bintrayUpload) {
+    httpMethod = 'post'
+    uri = 'https://bintray.com/api/v1/content/core9/core9/' + project.name + '/' + project.version + '/publish'
+    username = System.env.BINTRAY_USER
+    password = System.env.BINTRAY_KEY
+}
+
+dependencies {
+	apiCompile 'io.core9:core-api:+'
+	implCompile 'io.core9:module-server-api:+'
+	implCompile 'io.core9:module-database-mongodb-api:+' //TODO Remove
+	implCompile 'io.core9:module-database-api:+'
+}
