@@ -144,7 +144,7 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 				if(request.getVirtualHost().getContext("newhost", false)) {
 					switch(request.getMethod()) {
 					case POST:
-						Map<String,Object> body = request.getBodyAsMap();
+						Map<String,Object> body = request.getBodyAsMap().toBlocking().last();
 						try {
 							addVirtualHost(parseContext(request.getVirtualHost(), body));
 							request.getResponse().setTemplate("io.core9.admin.installed");
