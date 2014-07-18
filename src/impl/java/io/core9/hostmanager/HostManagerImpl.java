@@ -8,16 +8,15 @@ import io.core9.plugin.database.repository.RepositoryFactory;
 import io.core9.plugin.server.HostManager;
 import io.core9.plugin.server.VirtualHost;
 import io.core9.plugin.server.VirtualHostProcessor;
-import io.core9.plugin.server.handler.Binding;
 import io.core9.plugin.server.handler.Middleware;
 import io.core9.plugin.server.request.Request;
 
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import net.xeoh.plugins.base.Plugin;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
@@ -48,44 +47,10 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 	}
 	
 	@Override
-	public HostManager addVirtualHost(VirtualHost vhost) throws UnknownHostException {
-		if(MASTERDB != null) {
-			repository.create(MASTERDB, "", new VirtualHostImpl(vhost));
-		}
-		createVirtualHostDatabase(vhost);
-		return this;
-	}
-
-	@Override
-	public VirtualHost[] refreshVirtualHosts() {
-		Map<String, VirtualHost> currentHosts = getVirtualHostsByHostname();
-		try {
-			List<VirtualHostImpl> vhosts = repository.getAll(MASTERDB, "");
-			List<VirtualHost> newHosts = new ArrayList<VirtualHost>();
-			for(VirtualHostImpl vhost : vhosts) {
-				if(!currentHosts.containsKey(vhost.getHostname())) {
-					vhost.putContext("bindings", new CopyOnWriteArrayList<Binding>());
-					newHosts.add(vhost);
-					currentHosts.put(vhost.getHostname(), vhost);
-					createVirtualHostDatabase(vhost);
-				}
-			}
-			setVirtualHostsOnPlugins(newHosts.toArray(new VirtualHost[newHosts.size()]));
-			this.vhosts = currentHosts.values().toArray(new VirtualHost[currentHosts.values().size()]);
-        } catch (Exception e) {
-        	e.printStackTrace();
-        }
+	public VirtualHost[] getVirtualHosts() {
 		return this.vhosts;
 	}
 	
-	@Override
-	public VirtualHost[] getVirtualHosts() {
-		if(this.vhosts == null) {
-			this.vhosts = new VirtualHost[0];
-		}
-		return this.vhosts;
-	}
-
 	@Override
 	public Map<String, VirtualHost> getVirtualHostsByHostname() {
 		Map<String, VirtualHost> hosts = new HashMap<String, VirtualHost>();
@@ -94,20 +59,100 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 		}
 		return hosts;
 	}
-
+	
 	@Override
-	public void processPlugins() {
-		List<VirtualHostImpl> list = repository.getAll(MASTERDB, "");
-		this.vhosts = new VirtualHost[list.size()];
-		list.toArray(this.vhosts);
-		for(VirtualHost vhost : this.vhosts) {
+	public HostManager addVirtualHost(VirtualHost vhost) {
+		if(MASTERDB != null) {
+			repository.create(MASTERDB, "", new VirtualHostImpl(vhost));
 			try {
 				createVirtualHostDatabase(vhost);
 			} catch (UnknownHostException e) {
 				e.printStackTrace();
 			}
 		}
-		setVirtualHostsOnPlugins(this.vhosts);
+		int size = vhosts.length;
+		vhosts = Arrays.copyOf(vhosts, size++);
+		vhosts[size] = vhost;
+		for (Plugin plugin : this.registry.getPlugins()) {
+			List<Class<?>> interfaces = ClassUtils.getAllInterfaces(plugin.getClass());
+			if (interfaces.contains(VirtualHostProcessor.class)) {
+				((VirtualHostProcessor) plugin).addVirtualHost(vhost);
+			}
+		}
+		return this;
+	}
+	
+	@Override
+	public HostManager removeVirtualHost(VirtualHost vhost) {
+		List<VirtualHost> list = Arrays.asList(vhosts);
+		list.remove(vhost);
+		vhosts = list.toArray(new VirtualHost[list.size()]);
+		if(MASTERDB != null) {
+			repository.delete(MASTERDB, "", (VirtualHostImpl) vhost);
+		}
+		for (Plugin plugin : this.registry.getPlugins()) {
+			List<Class<?>> interfaces = ClassUtils.getAllInterfaces(plugin.getClass());
+			if (interfaces.contains(VirtualHostProcessor.class)) {
+				((VirtualHostProcessor) plugin).removeVirtualHost(vhost);
+			}
+		}
+		return this;
+	}
+	
+	@Override
+	public HostManager refreshVirtualHosts() {
+		// Keep track of current state and new state
+		List<VirtualHost> newVirtualHosts = new ArrayList<VirtualHost>();
+		Map<String, VirtualHost> oldVirtualHosts = this.getVirtualHostsByHostname();
+		List<VirtualHostImpl> dbVirtualHosts = repository.getAll(MASTERDB, "");
+		VirtualHost[] vhosts = new VirtualHost[dbVirtualHosts.size()];
+		
+		// Check if vhosts are new (to be added) or old (to be removed)
+		for(int i = vhosts.length; --i >= 0; ) {
+			VirtualHost vhost = dbVirtualHosts.get(i);
+			if(oldVirtualHosts.containsKey(vhost.getHostname())) {
+				vhost = oldVirtualHosts.remove(vhost.getHostname());
+			} else {
+				newVirtualHosts.add(vhost);
+			}
+			vhosts[i] = vhost;
+		}
+		// Remove or add all vhosts
+		for (Plugin plugin : this.registry.getPlugins()) {
+			List<Class<?>> interfaces = ClassUtils.getAllInterfaces(plugin.getClass());
+			if (interfaces.contains(VirtualHostProcessor.class)) {
+				newVirtualHosts.forEach(vhost -> {
+					((VirtualHostProcessor) plugin).addVirtualHost(vhost);
+				});
+				oldVirtualHosts.values().forEach(vhost -> {
+					((VirtualHostProcessor) plugin).removeVirtualHost(vhost);
+				});
+			}
+		}	
+		this.vhosts = vhosts;
+		return this;
+	}
+
+	@Override
+	public void processPlugins() {
+		List<VirtualHostProcessor> processors = new ArrayList<VirtualHostProcessor>();
+		for (Plugin plugin : this.registry.getPlugins()) {
+			if (ClassUtils.getAllInterfaces(plugin.getClass()).contains(VirtualHostProcessor.class)) {
+				processors.add((VirtualHostProcessor) plugin);
+			}
+		}
+		List<VirtualHostImpl> list = repository.getAll(MASTERDB, "");
+		list.forEach(vhost -> {
+			try {
+				createVirtualHostDatabase(vhost);
+				processors.forEach(processor -> {
+					processor.addVirtualHost(vhost);
+				});
+			} catch (UnknownHostException e) {
+				e.printStackTrace();
+			}
+		});
+		this.vhosts = list.toArray(new VirtualHost[list.size()]);
 	}
 	
 	/**
@@ -119,15 +164,6 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 			database.addDatabase((String) vhost.getContext("dbhost"), (String) vhost.getContext("database"), (String) vhost.getContext("dbuser"), (String) vhost.getContext("password"));
 		} else {
 			database.addDatabase((String) vhost.getContext("database"), (String) vhost.getContext("dbuser"), (String) vhost.getContext("password"));
-		}
-	}
-
-	private void setVirtualHostsOnPlugins(VirtualHost[] vhosts) {
-		for (Plugin plugin : this.registry.getPlugins()) {
-			List<Class<?>> interfaces = ClassUtils.getAllInterfaces(plugin.getClass());
-			if (interfaces.contains(VirtualHostProcessor.class)) {
-				((VirtualHostProcessor) plugin).process(vhosts);
-			}
 		}
 	}
 	
@@ -145,13 +181,8 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 					switch(request.getMethod()) {
 					case POST:
 						Map<String,Object> body = request.getBodyAsMap().toBlocking().last();
-						try {
-							addVirtualHost(parseContext(request.getVirtualHost(), body));
-							request.getResponse().setTemplate("io.core9.admin.installed");
-						} catch (UnknownHostException e) {
-							request.getResponse().setStatusCode(500);
-							request.getResponse().end("Error:" + e.getMessage());
-						}
+						addVirtualHost(parseContext(request.getVirtualHost(), body));
+						request.getResponse().setTemplate("io.core9.admin.installed");
 						break;
 					case GET:
 					default:
