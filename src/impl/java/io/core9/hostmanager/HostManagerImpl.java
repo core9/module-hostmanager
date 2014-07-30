@@ -84,7 +84,7 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 	
 	@Override
 	public HostManager removeVirtualHost(VirtualHost vhost) {
-		List<VirtualHost> list = Arrays.asList(vhosts);
+		List<VirtualHost> list = new ArrayList<VirtualHost>(Arrays.asList(vhosts));
 		list.remove(vhost);
 		vhosts = list.toArray(new VirtualHost[list.size()]);
 		if(MASTERDB != null) {
