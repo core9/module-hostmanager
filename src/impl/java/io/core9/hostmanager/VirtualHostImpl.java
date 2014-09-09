@@ -9,6 +9,8 @@ import java.util.Map;
 
 @Collection("virtualhosts")
 public class VirtualHostImpl extends AbstractCrudEntity implements VirtualHost {
+	
+	private static final long serialVersionUID = -6595616790854451905L;
 	private String hostname;
 	private Map<String,Object> context;
 	
