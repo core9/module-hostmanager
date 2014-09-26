@@ -31,7 +31,7 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 	
 	private static String MASTERDB;
 	
-	private VirtualHost[] vhosts;
+	private VirtualHost[] vhosts = new VirtualHost[0];
 	private CrudRepository<VirtualHostImpl> repository;
 	private MongoDatabase database;
 		
@@ -71,7 +71,7 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 			}
 		}
 		int size = vhosts.length;
-		vhosts = Arrays.copyOf(vhosts, size++);
+		vhosts = Arrays.copyOf(vhosts, size + 1);
 		vhosts[size] = vhost;
 		for (Plugin plugin : this.registry.getPlugins()) {
 			List<Class<?>> interfaces = ClassUtils.getAllInterfaces(plugin.getClass());
