@@ -64,17 +64,21 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 	public HostManager addVirtualHost(VirtualHost vhost) {
 		if(MASTERDB != null) {
 			repository.create(MASTERDB, "", new VirtualHostImpl(vhost));
-			try {
-				createVirtualHostDatabase(vhost);
-			} catch (UnknownHostException e) {
-				e.printStackTrace();
-			}
 		}
 		int size = vhosts.length;
 		vhosts = Arrays.copyOf(vhosts, size + 1);
 		vhosts[size] = vhost;
-		processors.forEach(processor -> processor.addVirtualHost(vhost));
+		processVirtualHost(vhost);
 		return this;
+	}
+	
+	private void processVirtualHost(VirtualHost vhost) {
+		try {
+			createVirtualHostDatabase(vhost);
+			processors.forEach(processor -> processor.addVirtualHost(vhost));
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	@Override
@@ -167,16 +171,7 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 	@Override
 	public void execute() {
 		List<VirtualHostImpl> list = repository.getAll(MASTERDB, "");
-		list.forEach(vhost -> {
-			try {
-				createVirtualHostDatabase(vhost);
-				processors.forEach(processor -> {
-					processor.addVirtualHost(vhost);
-				});
-			} catch (UnknownHostException e) {
-				e.printStackTrace();
-			}
-		});
+		list.forEach(vhost -> processVirtualHost(vhost));
 		this.vhosts = list.toArray(new VirtualHost[list.size()]);
 	}
 }
