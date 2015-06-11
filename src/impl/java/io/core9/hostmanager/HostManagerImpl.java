@@ -48,6 +48,9 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 	
 	@Override
 	public VirtualHost[] getVirtualHosts() {
+		if(this.vhosts.length == 0) {
+			this.refreshVirtualHosts();
+		}
 		return this.vhosts;
 	}
 	
