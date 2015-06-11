@@ -113,7 +113,7 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 		}
 		// Remove or add all vhosts
 		for (VirtualHostProcessor processor : processors) {
-			newVirtualHosts.forEach(vhost -> processor.addVirtualHost(vhost));
+			newVirtualHosts.forEach(vhost -> this.processVirtualHost(vhost));
 			oldVirtualHosts.values().forEach(vhost -> processor.removeVirtualHost(vhost));
 		}	
 		this.vhosts = vhosts;
