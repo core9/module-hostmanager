@@ -100,7 +100,12 @@ public class HostManagerImpl extends CoreBootStrategy implements HostManager {
 	public HostManager refreshVirtualHosts() {
 		// Keep track of current state and new state
 		List<VirtualHost> newVirtualHosts = new ArrayList<VirtualHost>();
-		Map<String, VirtualHost> oldVirtualHosts = this.getVirtualHostsByHostname();
+		Map<String, VirtualHost> oldVirtualHosts = new HashMap<String, VirtualHost>();
+		if(this.vhosts != null) {
+			for(VirtualHost vhost : this.vhosts) {
+				oldVirtualHosts.put(vhost.getHostname(), vhost);
+			}
+		}
 		List<VirtualHostImpl> dbVirtualHosts = repository.getAll(MASTERDB, "");
 		VirtualHost[] vhosts = new VirtualHost[dbVirtualHosts.size()];
 		
